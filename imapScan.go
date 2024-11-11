@@ -76,6 +76,8 @@ func NewIMAPFlags(port uint, hostname string, imapSecure bool, STARTTLS bool, ro
 			NoECDHE:                 false,
 			HeartbeatEnabled:        false,
 			DSAEnabled:              false,
+			MinVersion:              tls.VersionTLS10,
+			MaxVersion:              tls.VersionTLS13,
 		},
 		IMAPSecure: imapSecure, // 使用 --imaps 选项
 		Verbose:    true,       // 可选：启用详细日志记录

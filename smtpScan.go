@@ -74,6 +74,8 @@ func NewSMTPFlags(port uint, hostname string, smtpSecure bool, STARTTLS bool, ro
 			NoECDHE:                 false,
 			HeartbeatEnabled:        false,
 			DSAEnabled:              false,
+			MinVersion:              tls.VersionTLS10,
+			MaxVersion:              tls.VersionTLS13,
 		},
 		SMTPSecure: smtpSecure, // 使用 --smtp 选项
 		Verbose:    false,      // 可选：启用详细日志记录

@@ -76,6 +76,8 @@ func NewPOPFlags(port uint, hostname string, popSecure bool, STARTTLS bool, root
 			NoECDHE:                 false,
 			HeartbeatEnabled:        false,
 			DSAEnabled:              false,
+			MinVersion:              tls.VersionTLS10,
+			MaxVersion:              tls.VersionTLS13,
 		},
 		POP3Secure: popSecure, // 使用 --smtp 选项
 		Verbose:    true,      // 可选：启用详细日志记录
