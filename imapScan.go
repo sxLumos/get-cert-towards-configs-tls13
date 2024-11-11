@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) *tls.Certificates {
+func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.Certificates, string, string) {
 	module := imap.Module{}
 	scanner := module.NewScanner().(*imap.Scanner)
 
@@ -18,7 +18,7 @@ func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) *tls.Ce
 	err := scanner.Init(flags)
 	if err != nil {
 		log.Fatalf("Failed to initialize scanner: %v", err)
-		return nil
+		return nil, "", ""
 	}
 
 	// 3. 创建 ScanTarget 实例
@@ -34,12 +34,17 @@ func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) *tls.Ce
 	if result != nil {
 		scanResult := result.(*imap.ScanResults)
 		if scanResult != nil && scanResult.TLSLog != nil && scanResult.TLSLog.HandshakeLog != nil && scanResult.TLSLog.HandshakeLog.ServerCertificates != nil {
-			return scanResult.TLSLog.HandshakeLog.ServerCertificates
+			version := scanResult.TLSLog.HandshakeLog.ServerHello.Version
+			if scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions != nil {
+				version = scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions.SelectedVersion
+			}
+			ciperSuit := scanResult.TLSLog.HandshakeLog.ServerHello.CipherSuite
+			return scanResult.TLSLog.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
 		} else {
-			return nil
+			return nil, "", ""
 		}
 	} else {
-		return nil
+		return nil, "", ""
 	}
 }
 
@@ -54,7 +59,7 @@ func NewIMAPFlags(port uint, hostname string, imapSecure bool, STARTTLS bool, ro
 			BytesReadLimit: 0,
 		},
 		TLSFlags: zgrab2.TLSFlags{
-			Heartbleed:              false,
+			//Heartbleed:              false,
 			SessionTicket:           true,
 			ExtendedMasterSecret:    true,
 			ExtendedRandom:          false,

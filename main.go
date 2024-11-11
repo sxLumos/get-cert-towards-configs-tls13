@@ -40,6 +40,7 @@ type MyScanResult struct {
 	ConfigType          string `json:"configType"`   // Hostname_Port or URL
 	ConfigSource        string `json:"configSource"` // Autodiscover、FromDNS...
 	TLSVersion          string `json:"tlsVersion"`
+	CipherSuite         string `json:"cipherSuite"`
 	IsTrusted           bool   `json:"isTrusted"` // is certificate trusted?
 	VerificationProcess string `json:"verificationProcess"`
 	IsMatchDomain       bool   `json:"isMatchDomain"`
@@ -133,13 +134,15 @@ func parseHostPort(hostPort string) (string, int, error) {
 }
 
 // ConvertCertificatesToPEM 将 Certificates 对象转换为 PEM 格式的字符串
-func ConvertCertificatesToPEM(certificates *tls.Certificates) (string, bool, string) {
+func ConvertCertificatesToPEM(certificates *tls.Certificates) (string, bool, bool, string) {
 	var pemString string
 	var validResult = false
+	var isMatchDomain = false
 	var validError = ""
 	if certificates.Validation != nil {
 		validResult = certificates.Validation.BrowserTrusted
 		validError = certificates.Validation.BrowserError
+		isMatchDomain = certificates.Validation.MatchesDomain
 	}
 	// 处理主证书
 	if len(certificates.Certificate.Raw) > 0 {
@@ -161,7 +164,7 @@ func ConvertCertificatesToPEM(certificates *tls.Certificates) (string, bool, str
 		}
 	}
 
-	return pemString, validResult, validError
+	return pemString, validResult, isMatchDomain, validError
 }
 
 func addResult(result MyScanResult) {
@@ -213,6 +216,7 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 					ConfigSource:        entry.ConfigSource,
 					IsTrusted:           false, // 忽略对VMC的验证，后续单独讨论？
 					VerificationProcess: "",
+					IsMatchDomain:       false,
 					IsSameDomain:        isSameDomain,
 					ExtractedDomain:     extractedETLDDomain,
 					Extended:            entry.Extended,
@@ -233,19 +237,22 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 			return
 		}
 		flags := NewHTTPFlags(uint(443), parsedURL.Hostname(), rootCAs)
-		serverCertificates := HttpScan(parsedURL.Hostname(), uint(443), ip, *flags)
+		serverCertificates, version, ciperSuit := HttpScan(parsedURL.Hostname(), uint(443), ip, *flags)
 		if serverCertificates == nil {
 			return
 		}
-		serverCertificatesString, isTrusted, validError := ConvertCertificatesToPEM(serverCertificates)
+		serverCertificatesString, isTrusted, isMatchDomain, validError := ConvertCertificatesToPEM(serverCertificates)
 		extractedETLDDomain, isSameDomain := extractETLDDomain(parsedURL.Hostname(), domain, list)
 		result := MyScanResult{
 			Domain:              domain,
 			Config:              entry.Config,
 			ConfigType:          entry.ConfigType,
 			ConfigSource:        entry.ConfigSource,
+			TLSVersion:          version,
+			CipherSuite:         ciperSuit,
 			IsTrusted:           isTrusted,
 			VerificationProcess: validError,
+			IsMatchDomain:       isMatchDomain,
 			IsSameDomain:        isSameDomain,
 			ExtractedDomain:     extractedETLDDomain,
 			Extended:            entry.Extended,
@@ -301,18 +308,21 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 		switch protoAndSocket.Proto {
 		case "SMTP":
 			flags := NewSMTPFlags(uint(port), hostname, protoAndSocket.SocketType == "SSL_TLS", protoAndSocket.SocketType == "STARTTLS", rootCAs)
-			banner, serverCertificates := SMTPScan(hostname, uint(port), ip, flags)
+			banner, serverCertificates, version, ciperSuit := SMTPScan(hostname, uint(port), ip, flags)
 			if serverCertificates == nil {
 				return
 			}
-			serverCertificatesString, isTrusted, validError := ConvertCertificatesToPEM(serverCertificates)
+			serverCertificatesString, isTrusted, isMatchDomain, validError := ConvertCertificatesToPEM(serverCertificates)
 			result := MyScanResult{
 				Domain:              domain,
 				Config:              entry.Config,
 				ConfigType:          entry.ConfigType,
 				ConfigSource:        entry.ConfigSource,
+				TLSVersion:          version,
+				CipherSuite:         ciperSuit,
 				IsTrusted:           isTrusted,
 				VerificationProcess: validError,
+				IsMatchDomain:       isMatchDomain,
 				IsSameDomain:        isSameDomain,
 				ExtractedDomain:     extractedETLDDomain,
 				Extended:            entry.Extended,
@@ -324,18 +334,21 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 			addResult(result)
 		case "IMAP":
 			flags := NewIMAPFlags(uint(port), hostname, protoAndSocket.SocketType == "SSL_TLS", protoAndSocket.SocketType == "STARTTLS", rootCAs)
-			serverCertificates := IMAPScan(hostname, uint(port), ip, flags)
+			serverCertificates, version, ciperSuit := IMAPScan(hostname, uint(port), ip, flags)
 			if serverCertificates == nil {
 				return
 			}
-			serverCertificatesString, isTrusted, validError := ConvertCertificatesToPEM(serverCertificates)
+			serverCertificatesString, isTrusted, isMatchDomain, validError := ConvertCertificatesToPEM(serverCertificates)
 			result := MyScanResult{
 				Domain:              domain,
 				Config:              entry.Config,
 				ConfigType:          entry.ConfigType,
 				ConfigSource:        entry.ConfigSource,
+				TLSVersion:          version,
+				CipherSuite:         ciperSuit,
 				IsTrusted:           isTrusted,
 				VerificationProcess: validError,
+				IsMatchDomain:       isMatchDomain,
 				IsSameDomain:        isSameDomain,
 				ExtractedDomain:     extractedETLDDomain,
 				Extended:            entry.Extended,
@@ -347,18 +360,21 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 			addResult(result)
 		case "POP":
 			flags := NewPOPFlags(uint(port), hostname, protoAndSocket.SocketType == "SSL_TLS", protoAndSocket.SocketType == "STARTTLS", rootCAs)
-			serverCertificates := POPScan(hostname, uint(port), ip, flags)
+			serverCertificates, version, ciperSuit := POPScan(hostname, uint(port), ip, flags)
 			if serverCertificates == nil {
 				return
 			}
-			serverCertificatesString, isTrusted, validError := ConvertCertificatesToPEM(serverCertificates)
+			serverCertificatesString, isTrusted, isMatchDomain, validError := ConvertCertificatesToPEM(serverCertificates)
 			result := MyScanResult{
 				Domain:              domain,
 				Config:              entry.Config,
 				ConfigType:          entry.ConfigType,
 				ConfigSource:        entry.ConfigSource,
+				TLSVersion:          version,
+				CipherSuite:         ciperSuit,
 				IsTrusted:           isTrusted,
 				VerificationProcess: validError,
+				IsMatchDomain:       isMatchDomain,
 				IsSameDomain:        isSameDomain,
 				ExtractedDomain:     extractedETLDDomain,
 				Extended:            entry.Extended,

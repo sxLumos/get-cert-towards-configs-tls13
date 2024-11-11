@@ -3,15 +3,14 @@ package main
 import (
 	"fmt"
 	"github.com/zmap/zcrypto/tls"
+	"github.com/zmap/zgrab2"
+	"github.com/zmap/zgrab2/modules/http"
 	"log"
 	"net"
 	"time"
-
-	"github.com/zmap/zgrab2"
-	"github.com/zmap/zgrab2/modules/http"
 )
 
-func HttpScan(hostname string, port uint, ip net.IP, flags http.Flags) *tls.Certificates {
+func HttpScan(hostname string, port uint, ip net.IP, flags http.Flags) (*tls.Certificates, string, string) {
 	// 3. 创建 ScanTarget 实例
 	target := zgrab2.ScanTarget{
 		//Domain: hostname,
@@ -23,24 +22,28 @@ func HttpScan(hostname string, port uint, ip net.IP, flags http.Flags) *tls.Cert
 	conn, err := target.Open(&flags.BaseFlags)
 	if err != nil {
 		log.Printf("Failed to open connection to <%v:%v> --- %v", hostname, port, err)
-		return nil
+		return nil, "", ""
 	}
 	defer conn.Close()
 
 	tlsConn, err := flags.TLSFlags.GetTLSConnection(conn)
 	if err != nil {
 		log.Printf("Failed to get TLS connection <%v:%v> --- %v", hostname, port, err)
-		return nil
+		return nil, "", ""
 	}
 	defer tlsConn.Close()
 	err = tlsConn.Handshake()
 	fmt.Printf("Scan status<%s:%d>: %v\n", hostname, port, err)
 	res_log := tlsConn.GetLog()
-	fmt.Printf("TLS Version: %v\n", res_log.HandshakeLog.ServerHello.Version)
-	if res_log != nil && res_log.HandshakeLog != nil && res_log.HandshakeLog.ServerCertificates != nil {
-		return res_log.HandshakeLog.ServerCertificates
+	if res_log != nil && res_log.HandshakeLog != nil && res_log.HandshakeLog.ServerCertificates != nil && res_log.HandshakeLog.ServerHello != nil {
+		version := res_log.HandshakeLog.ServerHello.Version
+		if res_log.HandshakeLog.ServerHello.SupportedVersions != nil {
+			version = res_log.HandshakeLog.ServerHello.SupportedVersions.SelectedVersion
+		}
+		ciperSuit := res_log.HandshakeLog.ServerHello.CipherSuite
+		return res_log.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
 	} else {
-		return nil
+		return nil, "", ""
 	}
 }
 
@@ -50,7 +53,7 @@ func NewHTTPFlags(port uint, hostname string, rootCAs string) *http.Flags {
 		BaseFlags: zgrab2.BaseFlags{
 			Port:    port,
 			Name:    "https_scan",
-			Timeout: 200 * time.Second,
+			Timeout: 10 * time.Second,
 		},
 		TLSFlags: zgrab2.TLSFlags{
 			//Heartbleed:              false,
@@ -118,9 +121,10 @@ func NewHTTPFlags(port uint, hostname string, rootCAs string) *http.Flags {
 //
 //	for _, ip := range ips {
 //		fmt.Println("IP:", ip)
-//		cert := HttpScan(url, port, ip, *flags)
+//		cert, version, ciperSuits := HttpScan(url, port, ip, *flags)
 //		if cert != nil {
 //			fmt.Println(cert.Certificate.Parsed.Subject)
 //		}
+//		fmt.Println(version, ciperSuits)
 //	}
 //}

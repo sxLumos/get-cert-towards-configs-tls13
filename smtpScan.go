@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func SMTPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (string, *tls.Certificates) {
+func SMTPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (string, *tls.Certificates, string, string) {
 	module := smtp.Module{}
 	scanner := module.NewScanner().(*smtp.Scanner)
 
@@ -18,7 +18,7 @@ func SMTPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (string
 	err := scanner.Init(flags)
 	if err != nil {
 		log.Fatalf("Failed to initialize scanner: %v", err)
-		return "", nil
+		return "", nil, "", ""
 	}
 
 	// 3. 创建 ScanTarget 实例
@@ -34,12 +34,17 @@ func SMTPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (string
 	if result != nil {
 		scanResult := result.(*smtp.ScanResults)
 		if scanResult != nil && scanResult.TLSLog != nil && scanResult.TLSLog.HandshakeLog != nil && scanResult.TLSLog.HandshakeLog.ServerCertificates != nil {
-			return scanResult.Banner, scanResult.TLSLog.HandshakeLog.ServerCertificates
+			version := scanResult.TLSLog.HandshakeLog.ServerHello.Version
+			if scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions != nil {
+				version = scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions.SelectedVersion
+			}
+			ciperSuit := scanResult.TLSLog.HandshakeLog.ServerHello.CipherSuite
+			return scanResult.Banner, scanResult.TLSLog.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
 		} else {
-			return "", nil
+			return "", nil, "", ""
 		}
 	} else {
-		return "", nil
+		return "", nil, "", ""
 	}
 }
 
@@ -52,7 +57,7 @@ func NewSMTPFlags(port uint, hostname string, smtpSecure bool, STARTTLS bool, ro
 			Timeout: 10 * time.Second,
 		},
 		TLSFlags: zgrab2.TLSFlags{
-			Heartbleed:              false,
+			//Heartbleed:              false,
 			SessionTicket:           true,
 			ExtendedMasterSecret:    true,
 			ExtendedRandom:          false,

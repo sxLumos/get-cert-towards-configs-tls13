@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) *tls.Certificates {
+func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.Certificates, string, string) {
 	module := pop3.Module{}
 	scanner := module.NewScanner().(*pop3.Scanner)
 
@@ -18,7 +18,7 @@ func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) *tls.Cer
 	err := scanner.Init(flags)
 	if err != nil {
 		log.Fatalf("Failed to initialize scanner: %v", err)
-		return nil
+		return nil, "", ""
 	}
 
 	// 3. 创建 ScanTarget 实例
@@ -33,13 +33,18 @@ func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) *tls.Cer
 	fmt.Printf("Scan status<%s:%d>: %v(%v)\n", host, port, status, err)
 	if result != nil {
 		scanResult := result.(*pop3.ScanResults)
-		if scanResult != nil && scanResult.TLSLog != nil && scanResult.TLSLog.HandshakeLog != nil && scanResult.TLSLog.HandshakeLog.ServerCertificates != nil {
-			return scanResult.TLSLog.HandshakeLog.ServerCertificates
+		if scanResult != nil && scanResult.TLSLog != nil && scanResult.TLSLog.HandshakeLog != nil && scanResult.TLSLog.HandshakeLog.ServerCertificates != nil && scanResult.TLSLog.HandshakeLog.ServerHello != nil {
+			version := scanResult.TLSLog.HandshakeLog.ServerHello.Version
+			if scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions != nil {
+				version = scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions.SelectedVersion
+			}
+			ciperSuit := scanResult.TLSLog.HandshakeLog.ServerHello.CipherSuite
+			return scanResult.TLSLog.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
 		} else {
-			return nil
+			return nil, "", ""
 		}
 	} else {
-		return nil
+		return nil, "", ""
 	}
 }
 
@@ -54,7 +59,7 @@ func NewPOPFlags(port uint, hostname string, popSecure bool, STARTTLS bool, root
 			BytesReadLimit: 0,
 		},
 		TLSFlags: zgrab2.TLSFlags{
-			Heartbleed:              false,
+			//Heartbleed:              false,
 			SessionTicket:           true,
 			ExtendedMasterSecret:    true,
 			ExtendedRandom:          false,
