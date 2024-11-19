@@ -1,6 +1,6 @@
 module get-cert-towards-configs-tls13
 
-go 1.22
+go 1.21
 
 require (
 	github.com/sourcegraph/conc v0.3.0

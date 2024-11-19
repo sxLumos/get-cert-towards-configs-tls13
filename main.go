@@ -68,6 +68,7 @@ var portToProto = map[int]ProtoAndSocketType{ // 用于DNS SRV的形式
 	465: {"SMTP", "SSL"},
 	587: {"SMTP", "STARTTLS"},
 	25:  {"SMTP", "STARTTLS"},
+	2525:{"SMTP", "STARTTLS"}, 
 	143: {"IMAP", "STARTTLS"},
 	993: {"IMAP", "SSL"},
 	110: {"POP", "STARTTLS"},
@@ -292,13 +293,13 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 		}
 		extractedETLDDomain, isSameDomain := extractETLDDomain(hostname, domain, list)
 		var protoAndSocket ProtoAndSocketType
-		if entry.ConfigSource == "FromDNS_SRV" {
+		if entry.ConfigSource == "FromDNS_SRV" || entry.ConfigSource == "FromDNS_MX" {
 			var exists bool
 			protoAndSocket, exists = portToProto[port]
 			if !exists {
 				return
 			}
-		} else {
+		} else { // Guess方法
 			protoAndSocket.Proto = entry.Extended
 			protoAndSocket.SocketType = entry.SocketType
 			if protoAndSocket.SocketType != "SSL_TLS" && protoAndSocket.SocketType != "STARTTLS" {
@@ -408,7 +409,7 @@ func main() {
 	}
 
 	// Open the JSON file
-	file, err := os.Open("test.json") // ConfigProcessResult.json、 test.json
+	file, err := os.Open("ConfigProcessResult.json") // ConfigProcessResult.json、 test.json
 	rootCAsPath := "IncludedRootsPEM.txt"
 	if err != nil {
 		log.Fatalf("failed to open file: %v", err)
