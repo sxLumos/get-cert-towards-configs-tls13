@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.Certificates, string, string) {
+func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (string, *tls.Certificates, string, string) {
 	module := imap.Module{}
 	scanner := module.NewScanner().(*imap.Scanner)
 
@@ -18,7 +18,7 @@ func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.C
 	err := scanner.Init(flags)
 	if err != nil {
 		log.Fatalf("Failed to initialize scanner: %v", err)
-		return nil, "", ""
+		return "", nil, "", ""
 	}
 
 	// 3. 创建 ScanTarget 实例
@@ -39,12 +39,12 @@ func IMAPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.C
 				version = scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions.SelectedVersion
 			}
 			ciperSuit := scanResult.TLSLog.HandshakeLog.ServerHello.CipherSuite
-			return scanResult.TLSLog.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
+			return scanResult.Banner, scanResult.TLSLog.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
 		} else {
-			return nil, "", ""
+			return "", nil, "", ""
 		}
 	} else {
-		return nil, "", ""
+		return "", nil, "", ""
 	}
 }
 

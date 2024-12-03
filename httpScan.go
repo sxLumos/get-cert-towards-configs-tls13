@@ -72,7 +72,7 @@ func NewHTTPFlags(port uint, hostname string, rootCAs string) *http.Flags {
 			NoECDHE:                 false,
 			HeartbeatEnabled:        false,
 			DSAEnabled:              false,
-			MinVersion:              tls.VersionTLS11,
+			MinVersion:              tls.VersionTLS10,
 			MaxVersion:              tls.VersionTLS13,
 		},
 		Method:                   "GET",

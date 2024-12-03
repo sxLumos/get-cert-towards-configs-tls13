@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.Certificates, string, string) {
+func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (string, *tls.Certificates, string, string) {
 	module := pop3.Module{}
 	scanner := module.NewScanner().(*pop3.Scanner)
 
@@ -18,7 +18,7 @@ func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.Ce
 	err := scanner.Init(flags)
 	if err != nil {
 		log.Fatalf("Failed to initialize scanner: %v", err)
-		return nil, "", ""
+		return "", nil, "", ""
 	}
 
 	// 3. 创建 ScanTarget 实例
@@ -39,12 +39,12 @@ func POPScan(host string, port uint, ip net.IP, flags zgrab2.ScanFlags) (*tls.Ce
 				version = scanResult.TLSLog.HandshakeLog.ServerHello.SupportedVersions.SelectedVersion
 			}
 			ciperSuit := scanResult.TLSLog.HandshakeLog.ServerHello.CipherSuite
-			return scanResult.TLSLog.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
+			return scanResult.Banner, scanResult.TLSLog.HandshakeLog.ServerCertificates, version.String(), ciperSuit.String()
 		} else {
-			return nil, "", ""
+			return "", nil, "", ""
 		}
 	} else {
-		return nil, "", ""
+		return "", nil, "", ""
 	}
 }
 

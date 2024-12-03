@@ -64,15 +64,14 @@ type JobInfo struct {
 	Domain string      `json:"domain"`
 }
 
-var portToProto = map[int]ProtoAndSocketType{ // 用于DNS SRV的形式
-	465: {"SMTP", "SSL"},
-	587: {"SMTP", "STARTTLS"},
-	25:  {"SMTP", "STARTTLS"},
-	2525:{"SMTP", "STARTTLS"}, 
-	143: {"IMAP", "STARTTLS"},
-	993: {"IMAP", "SSL"},
-	110: {"POP", "STARTTLS"},
-	995: {"POP", "SSL"},
+var portToSocketType = map[int]string{ // 用于DNS SRV的形式
+	465: "SSL",
+	587: "STARTTLS",
+	25:  "STARTTLS",
+	143: "STARTTLS",
+	993: "SSL",
+	110: "STARTTLS",
+	995: "SSL",
 }
 
 // ConfigData represents the overall structure of the JSON data
@@ -293,11 +292,35 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 		}
 		extractedETLDDomain, isSameDomain := extractETLDDomain(hostname, domain, list)
 		var protoAndSocket ProtoAndSocketType
-		if entry.ConfigSource == "FromDNS_SRV" || entry.ConfigSource == "FromDNS_MX" {
+		if entry.ConfigSource == "FromDNS_SRV"{
+			var socketType string
 			var exists bool
-			protoAndSocket, exists = portToProto[port]
+			socketType, exists = portToSocketType[port]
 			if !exists {
+				socketType = "SSL"
+			}
+			if strings.HasSuffix(entry.Extended, "_submission") {
+				protoAndSocket = ProtoAndSocketType{
+					SocketType: socketType,
+					Proto:      "SMTP",
+				}
+			} else if strings.HasSuffix(entry.Extended, "_imap") {
+				protoAndSocket = ProtoAndSocketType{
+					SocketType: socketType,
+					Proto:      "IMAP",
+				}
+			} else if strings.HasSuffix(entry.Extended, "_pop") {
+				protoAndSocket = ProtoAndSocketType{
+					SocketType: socketType,
+					Proto:      "POP",
+				}
+			} else {
 				return
+			}
+		} else if entry.ConfigSource == "FromDNS_MX" {
+			protoAndSocket = ProtoAndSocketType{
+				SocketType: "STARTTLS",
+				Proto:      "SMTP",
 			}
 		} else { // Guess方法
 			protoAndSocket.Proto = entry.Extended
@@ -335,7 +358,7 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 			addResult(result)
 		case "IMAP":
 			flags := NewIMAPFlags(uint(port), hostname, protoAndSocket.SocketType == "SSL_TLS", protoAndSocket.SocketType == "STARTTLS", rootCAs)
-			serverCertificates, version, ciperSuit := IMAPScan(hostname, uint(port), ip, flags)
+			banner, serverCertificates, version, ciperSuit := IMAPScan(hostname, uint(port), ip, flags)
 			if serverCertificates == nil {
 				return
 			}
@@ -356,12 +379,12 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 				ServerType:          "IMAP",
 				IP:                  ip,
 				Certificates:        serverCertificatesString,
-				Banner:              "",
+				Banner:              banner,
 			}
 			addResult(result)
 		case "POP":
 			flags := NewPOPFlags(uint(port), hostname, protoAndSocket.SocketType == "SSL_TLS", protoAndSocket.SocketType == "STARTTLS", rootCAs)
-			serverCertificates, version, ciperSuit := POPScan(hostname, uint(port), ip, flags)
+			banner, serverCertificates, version, ciperSuit := POPScan(hostname, uint(port), ip, flags)
 			if serverCertificates == nil {
 				return
 			}
@@ -382,7 +405,7 @@ func scan(job JobInfo, rootCAs string, list *publicsuffix.List) {
 				ServerType:          "POP",
 				IP:                  ip,
 				Certificates:        serverCertificatesString,
-				Banner:              "",
+				Banner:              banner,
 			}
 			addResult(result)
 		default:
@@ -409,7 +432,7 @@ func main() {
 	}
 
 	// Open the JSON file
-	file, err := os.Open("ConfigProcessResult.json") // ConfigProcessResult.json、 test.json
+	file, err := os.Open("test.json") // ConfigProcessResult.json、 test.json
 	rootCAsPath := "IncludedRootsPEM.txt"
 	if err != nil {
 		log.Fatalf("failed to open file: %v", err)
@@ -460,7 +483,7 @@ func main() {
 	wg.Wait()
 
 	// Open output file for results
-	outputFile, err := os.Create("scan_results.txt")
+	outputFile, err := os.Create("scan_results_50w_100w_part2.txt")
 	if err != nil {
 		log.Fatalf("failed to create output file: %v", err)
 	}
