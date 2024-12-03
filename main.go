@@ -434,6 +434,7 @@ func main() {
 	// Open the JSON file
 	file, err := os.Open("test.json") // ConfigProcessResult.json、 test.json
 	rootCAsPath := "IncludedRootsPEM.txt"
+	outputFileName := "scan_results.txt"
 	if err != nil {
 		log.Fatalf("failed to open file: %v", err)
 	}
@@ -483,7 +484,7 @@ func main() {
 	wg.Wait()
 
 	// Open output file for results
-	outputFile, err := os.Create("scan_results_50w_100w_part2.txt")
+	outputFile, err := os.Create(outputFileName)
 	if err != nil {
 		log.Fatalf("failed to create output file: %v", err)
 	}
